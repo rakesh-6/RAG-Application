@@ -102,7 +102,7 @@ Check Render's pricing page for current limits. When this was written:
 
    | Key | Value |
    |---|---|
-   | `NODE_VERSION` | `22` |
+   | `NODE_VERSION` | `24` (same as your laptop: its npm 11 wrote `package-lock.json`, and npm 10 from Node 22 rejects it) |
    | `VITE_API_BASE_URL` | `https://<your-api-name>.onrender.com/api` (your backend URL from Step 1, plus `/api`, no `/` at the end) |
 
 4. Click **Create Static Site** and wait for the build.
