@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.deps import DbSession
+from app.api.responses import error_responses
 from app.core.config import get_settings
 from app.core.exceptions import ServiceUnavailableError
 from app.schemas.health import HealthResponse
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get("/health", response_model=HealthResponse, responses=error_responses(503))
 def health_check(db: DbSession) -> HealthResponse:
     """Confirm the API is running and can reach the database."""
     try:

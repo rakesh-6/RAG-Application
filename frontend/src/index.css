@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+/* Design tokens from docs/UI_UX_DESIGN.md. Colors use Tailwind's default palette
+   (indigo, slate, green, amber, red), so only the fonts need defining here. */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-white text-slate-900 antialiased;
+  }
+}

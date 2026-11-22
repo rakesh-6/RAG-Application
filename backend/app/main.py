@@ -19,6 +19,26 @@ from app.services import document_service
 
 logger = logging.getLogger(__name__)
 
+API_DESCRIPTION = """
+Upload PDF, DOCX and TXT documents and ask questions about them. Answers come only
+from your documents, with the file name and page number of every source.
+
+**Try it here:**
+1. `POST /api/auth/register` to create an account.
+2. `POST /api/auth/login` and copy the `access_token`.
+3. Click **Authorize** (top right) and paste the token.
+4. Upload a document with `POST /api/documents`, then ask with `POST /api/chat/ask`.
+
+Errors come back as `{"detail": "<message>"}`. Validation errors (422) use FastAPI's standard format, where `detail` is a list of problems.
+"""
+
+OPENAPI_TAGS = [
+    {"name": "health", "description": "Is the API up, and can it reach the database?"},
+    {"name": "auth", "description": "Register, log in (JWT access token) and read the current user."},
+    {"name": "documents", "description": "Upload, list and delete documents. Uploads are processed (text → chunks → embeddings) before the response."},
+    {"name": "chat", "description": "Ask questions (retrieval-augmented generation) and manage conversation history."},
+]
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -39,7 +59,13 @@ def create_app() -> FastAPI:
     settings = get_settings()
     setup_logging(settings.log_level)
 
-    app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title=settings.app_name,
+        version="1.0.0",
+        description=API_DESCRIPTION,
+        openapi_tags=OPENAPI_TAGS,
+        lifespan=lifespan,
+    )
 
     # Allow only our frontend's URL(s) to call the API from a browser.
     app.add_middleware(

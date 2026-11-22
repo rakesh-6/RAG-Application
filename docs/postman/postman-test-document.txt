@@ -1,0 +1,5 @@
+Postman test document (fictional, used only for API testing)
+
+The office cafeteria opens at 8:00 and closes at 18:00 on weekdays.
+Lunch is served between 12:30 and 14:30.
+On Saturdays the cafeteria is open from 9:00 to 13:00. It is closed on Sundays.

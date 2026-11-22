@@ -32,6 +32,7 @@ from langchain_chroma import Chroma  # noqa: E402
 from langchain_core.embeddings import DeterministicFakeEmbedding  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
+from app.core.rate_limit import login_limiter  # noqa: E402
 from app.database.base import Base  # noqa: E402
 from app.database.session import engine  # noqa: E402
 from app.main import app  # noqa: E402
@@ -94,6 +95,7 @@ def client() -> Iterator[TestClient]:
         for table in reversed(Base.metadata.sorted_tables):
             connection.execute(table.delete())
     shutil.rmtree(get_settings().upload_dir, ignore_errors=True)  # and remove uploaded files
+    login_limiter.clear()  # failed logins from one test must not block the next
 
 
 @pytest.fixture

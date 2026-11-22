@@ -1,7 +1,7 @@
 """Application errors and the handlers that turn them into JSON responses.
 
-Services raise these errors; routes don't need try/except. Every error the API
-returns has the same shape: {"detail": "<message>"}.
+Services raise these errors; routes don't need try/except. Every error raised
+here reaches the client as {"detail": "<message>"}.
 """
 
 import logging
@@ -17,9 +17,10 @@ class AppError(Exception):
 
     status_code: int = 400
 
-    def __init__(self, message: str) -> None:
+    def __init__(self, message: str, headers: dict[str, str] | None = None) -> None:
         super().__init__(message)
         self.message = message
+        self.headers = headers
 
 
 class BadRequestError(AppError):
@@ -44,10 +45,12 @@ class PayloadTooLargeError(AppError):
     status_code = 413
 
 
-class AIServiceBusyError(AppError):
-    """Gemini returned 'too many requests' (free-tier rate limit)."""
-
+class TooManyRequestsError(AppError):
     status_code = 429
+
+
+class AIServiceBusyError(TooManyRequestsError):
+    """Gemini returned 'too many requests' (free-tier rate limit)."""
 
     def __init__(self, message: str = "The AI service is busy right now. Try again in a minute.") -> None:
         super().__init__(message)
@@ -67,9 +70,11 @@ class ServiceUnavailableError(AppError):
 
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-    # The HTTP standard says a 401 should tell the client which login scheme to use.
-    headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message}, headers=headers)
+    headers = dict(exc.headers or {})
+    if exc.status_code == 401:
+        # The HTTP standard says a 401 should tell the client which login scheme to use.
+        headers.setdefault("WWW-Authenticate", "Bearer")
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message}, headers=headers or None)
 
 
 async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:

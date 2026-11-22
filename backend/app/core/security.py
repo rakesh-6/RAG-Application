@@ -1,5 +1,6 @@
 """Password hashing (bcrypt) and login tokens (JWT)."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -33,26 +34,36 @@ def check_jwt_secret_is_set() -> None:
     """Called at startup: refuse to run with a missing or weak signing secret."""
     if len(_secret_key()) < MIN_SECRET_LENGTH:
         raise RuntimeError(
-            f"JWT_SECRET_KEY in backend/.env must be at least {MIN_SECRET_LENGTH} characters. "
+            f"JWT_SECRET_KEY (in backend/.env, or your host's environment variables) must be at least "
+            f"{MIN_SECRET_LENGTH} characters. "
             'Generate one with: py -3.12 -c "import secrets; print(secrets.token_urlsafe(48))"'
         )
 
 
-def create_access_token(user_id: int, expires_delta: timedelta | None = None) -> str:
+@dataclass(frozen=True)
+class TokenClaims:
+    user_id: int
+    email: str
+
+
+def create_access_token(user_id: int, email: str, expires_delta: timedelta | None = None) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
     expires_at = now + (expires_delta or timedelta(minutes=settings.jwt_expire_minutes))
-    payload = {"sub": str(user_id), "iat": now, "exp": expires_at}
+    # The email ties the token to one specific account. The ID alone isn't enough: if the
+    # database is reset (as on free hosting), a new account can get the same ID, and an
+    # old token would otherwise log into it.
+    payload = {"sub": str(user_id), "email": email, "iat": now, "exp": expires_at}
     return jwt.encode(payload, _secret_key(), algorithm=settings.jwt_algorithm)
 
 
-def decode_access_token(token: str) -> int:
-    """Return the user ID inside a valid token, or raise UnauthorizedError."""
+def decode_access_token(token: str) -> TokenClaims:
+    """Return the claims inside a valid token, or raise UnauthorizedError."""
     try:
         # Passing an explicit algorithms list stops attackers choosing a weaker
         # algorithm (or "none") in the token header.
         payload = jwt.decode(token, _secret_key(), algorithms=[get_settings().jwt_algorithm])
-        return int(payload["sub"])
+        return TokenClaims(user_id=int(payload["sub"]), email=str(payload["email"]))
     except jwt.ExpiredSignatureError as exc:
         raise UnauthorizedError("Token has expired, please log in again") from exc
     except (jwt.InvalidTokenError, KeyError, ValueError) as exc:

@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# App data (keep the folders, ignore the contents)
+backend/data/*
+!backend/data/uploads/
+!backend/data/chroma_db/
+backend/data/uploads/*
+backend/data/chroma_db/*
+!backend/data/**/.gitkeep
+*.db
+*.sqlite3
+
+# Node / frontend
+node_modules/
+dist/
+*.local
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

@@ -26,9 +26,10 @@ def get_current_user(
     if credentials is None:
         raise UnauthorizedError("Not authenticated")
 
-    user_id = decode_access_token(credentials.credentials)
-    user = db.get(User, user_id)
-    if user is None:
+    claims = decode_access_token(credentials.credentials)
+    user = db.get(User, claims.user_id)
+    # A different email means the ID now belongs to someone else (after a database reset).
+    if user is None or user.email != claims.email:
         raise UnauthorizedError("User no longer exists")
     return user
 

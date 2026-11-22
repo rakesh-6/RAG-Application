@@ -1,0 +1,849 @@
+{
+  "info": {
+    "name": "RAG Knowledge Assistant API",
+    "description": "API tests for the RAG Knowledge Assistant backend.\n\n**Run everything:** right-click the collection → *Run collection*. It registers a test user, logs in (the token is saved automatically), uploads a small test document, asks questions (including a follow-up and an unanswerable one), checks error cases, then deletes what it created, so you can run it again.\n\n**Before running:**\n1. Start the backend (`uvicorn app.main:app --reload`) with `GEMINI_API_KEY` set in `backend/.env`.\n2. In Postman, open *Settings → General → Working directory* and choose the project folder. The upload requests use the files `docs/postman/postman-test-document.txt` and `README.md` from it.\n\nChange `baseUrl` in the collection's *Variables* tab to test a deployed backend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "1. Health check",
+      "item": [
+        {
+          "name": "Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"API and database are OK\", () => { pm.expect(body.status).to.eql('ok'); pm.expect(body.database).to.eql('ok'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Is the API running and connected to the database?",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Accounts",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201 or 409\", () => pm.expect(pm.response.code).to.be.oneOf([201, 409]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Creates the test user. Returns 409 if it already exists from an earlier run; that's fine.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Log in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"token\", body.access_token);",
+                  "pm.test(\"Returns a bearer token\", () => { pm.expect(body.token_type).to.eql('bearer'); pm.expect(body.access_token).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Logs in and saves the access token, which every later request sends automatically.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Current user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"It is the test user\", () => { pm.expect(body.email).to.eql(pm.collectionVariables.get('email')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Reads the logged-in user from the token."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Documents",
+      "item": [
+        {
+          "name": "Upload document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"documentId\", body.id);",
+                  "pm.test(\"Processed and ready to search\", () => { pm.expect(body.status).to.eql('ready'); pm.expect(body.chunk_count).to.be.above(0); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents"
+              ]
+            },
+            "description": "Uploads the small test document and waits for it to be processed (text → chunks → embeddings).",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "docs/postman/postman-test-document.txt"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List my documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Contains the uploaded document\", () => { pm.expect(body.map(d => d.id)).to.include(Number(pm.collectionVariables.get('documentId'))); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents"
+              ]
+            },
+            "description": "Lists the logged-in user's documents, newest first."
+          },
+          "response": []
+        },
+        {
+          "name": "Get one document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Right file\", () => { pm.expect(body.original_filename).to.eql('postman-test-document.txt'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{documentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{documentId}}"
+              ]
+            },
+            "description": "Details of one document."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Chat",
+      "item": [
+        {
+          "name": "Ask a question (new conversation)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"conversationId\", body.conversation_id);",
+                  "pm.test(\"Answer found, with the test document as its source\", () => { pm.expect(body.assistant_message.found).to.be.true; pm.expect(body.assistant_message.sources[0].filename).to.eql('postman-test-document.txt'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/chat/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "ask"
+              ]
+            },
+            "description": "Starts a conversation. The answer must come from the document, with a source.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"When does the office cafeteria open on weekdays?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Ask a follow-up question",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Same conversation, question was rewritten\", () => { pm.expect(body.conversation_id).to.eql(Number(pm.collectionVariables.get('conversationId'))); pm.expect(body.assistant_message.standalone_question).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/chat/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "ask"
+              ]
+            },
+            "description": "\"it\" refers to the cafeteria: the backend rewrites the question using the chat history before searching.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"And when does it close?\",\n  \"conversation_id\": {{conversationId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Ask something not in the documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Not found, no sources\", () => { pm.expect(body.assistant_message.found).to.be.false; pm.expect(body.assistant_message.sources).to.be.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/chat/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "ask"
+              ]
+            },
+            "description": "The document doesn't mention revenue, so the answer must be 'not found' instead of a guess.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"What was the company's revenue last year?\",\n  \"conversation_id\": {{conversationId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List my conversations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Contains the conversation\", () => { pm.expect(body.map(c => c.id)).to.include(Number(pm.collectionVariables.get('conversationId'))); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/conversations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "conversations"
+              ]
+            },
+            "description": "Most recently used first."
+          },
+          "response": []
+        },
+        {
+          "name": "Conversation messages",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"6 messages saved\", () => { pm.expect(body).to.have.lengthOf(6); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/conversations/{{conversationId}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "conversations",
+                "{{conversationId}}",
+                "messages"
+              ]
+            },
+            "description": "The full history: 3 questions and 3 answers."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Error cases (these should fail)",
+      "item": [
+        {
+          "name": "Wrong password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 401\", () => pm.response.to.have.status(401));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Error message is \\\"Incorrect email or password\\\"\", () => { pm.expect(body.detail).to.eql(\"Incorrect email or password\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Wrong password: 401 with a message that doesn't reveal whether the email exists.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"WrongPassword1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "No token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 401\", () => pm.response.to.have.status(401));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Error message is \\\"Not authenticated\\\"\", () => { pm.expect(body.detail).to.eql(\"Not authenticated\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Protected route called without logging in.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unsupported file type",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Error message is \\\"README.md can't be uploaded. Use PDF, DOCX or TXT.\\\"\", () => { pm.expect(body.detail).to.eql(\"README.md can't be uploaded. Use PDF, DOCX or TXT.\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents"
+              ]
+            },
+            "description": "Uploads README.md: only PDF, DOCX and TXT are allowed.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "README.md"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Duplicate upload",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 409\", () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Error message is \\\"postman-test-document.txt is already in your library.\\\"\", () => { pm.expect(body.detail).to.eql(\"postman-test-document.txt is already in your library.\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents"
+              ]
+            },
+            "description": "The same file again is rejected (SHA-256 content hash).",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "docs/postman/postman-test-document.txt"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Blank question",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/chat/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chat",
+                "ask"
+              ]
+            },
+            "description": "Pydantic validation rejects an empty question.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Document that doesn't exist",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Error message is \\\"Document not found.\\\"\", () => { pm.expect(body.detail).to.eql(\"Document not found.\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "999999"
+              ]
+            },
+            "description": "Missing documents and other users' documents both return 404."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Clean up",
+      "item": [
+        {
+          "name": "Delete conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/conversations/{{conversationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "conversations",
+                "{{conversationId}}"
+              ]
+            },
+            "description": "Deletes the conversation and its messages."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{documentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{documentId}}"
+              ]
+            },
+            "description": "Deletes the record, the stored file and all its vectors."
+          },
+          "response": []
+        },
+        {
+          "name": "Deleted document is gone",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{documentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{documentId}}"
+              ]
+            },
+            "description": "Confirms the delete worked."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000/api",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "postman-test@example.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "Postman123",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "documentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "conversationId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

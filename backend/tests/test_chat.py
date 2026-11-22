@@ -95,6 +95,31 @@ def test_users_only_search_their_own_documents(
     assert fake_llm.calls == []
 
 
+def test_only_cited_sources_are_returned(client: TestClient, register_and_login: Callable, fake_llm: FakeLLM) -> None:
+    headers = register_and_login()
+    upload(client, headers, "Leave_Policy.txt", LEAVE_POLICY_TEXT.encode())  # several chunks (CHUNK_SIZE=200)
+    fake_llm.answer = "Unused days lapse on 31 December [2]."
+
+    answer = ask(client, headers).json()["assistant_message"]
+
+    assert [s["number"] for s in answer["sources"]] == [2]  # passages the answer didn't use are left out
+
+
+def test_old_answers_keep_their_sources_after_the_document_is_deleted(
+    client: TestClient, register_and_login: Callable
+) -> None:
+    headers = register_and_login()
+    doc_id = upload(client, headers, "Leave_Policy.txt", LEAVE_POLICY_TEXT.encode()).json()["id"]
+    conversation_id = ask(client, headers).json()["conversation_id"]
+
+    client.delete(f"/api/documents/{doc_id}", headers=headers)
+
+    messages = client.get(f"{CONVERSATIONS_URL}/{conversation_id}/messages", headers=headers).json()
+    assert messages[1]["sources"][0]["filename"] == "Leave_Policy.txt"
+    new_answer = ask(client, headers).json()["assistant_message"]
+    assert new_answer["found"] is False  # but new questions can't use the deleted document
+
+
 def test_conversations_list_messages_and_delete(client: TestClient, register_and_login: Callable) -> None:
     headers = register_and_login()
     upload(client, headers, "Leave_Policy.txt", LEAVE_POLICY_TEXT.encode())

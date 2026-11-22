@@ -121,7 +121,7 @@ def test_me_with_garbage_token_returns_401(client: TestClient) -> None:
 
 
 def test_me_with_expired_token_returns_401(client: TestClient) -> None:
-    expired = create_access_token(user_id=1, expires_delta=timedelta(minutes=-1))
+    expired = create_access_token(user_id=1, email="alice@example.com", expires_delta=timedelta(minutes=-1))
 
     response = client.get(ME_URL, headers={"Authorization": f"Bearer {expired}"})
 
@@ -139,7 +139,7 @@ def test_me_with_token_signed_by_another_secret_returns_401(client: TestClient) 
 
 
 def test_me_with_token_for_deleted_user_returns_401(client: TestClient) -> None:
-    token_for_missing_user = create_access_token(user_id=9999)
+    token_for_missing_user = create_access_token(user_id=9999, email="ghost@example.com")
 
     response = client.get(ME_URL, headers={"Authorization": f"Bearer {token_for_missing_user}"})
 

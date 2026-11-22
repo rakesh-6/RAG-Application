@@ -1,7 +1,13 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from pydantic import AfterValidator
+from pydantic import AfterValidator, BaseModel
+
+
+class ErrorResponse(BaseModel):
+    """The shape of every error the API returns."""
+
+    detail: str
 
 
 def _ensure_utc(value: datetime) -> datetime:

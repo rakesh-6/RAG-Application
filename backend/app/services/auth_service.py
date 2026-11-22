@@ -54,4 +54,4 @@ def login(db: Session, data: LoginRequest) -> str:
     """Check the credentials and return a new access token."""
     user = authenticate_user(db, data)
     logger.info("User logged in (id=%s)", user.id)
-    return create_access_token(user.id)
+    return create_access_token(user.id, user.email)
